@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "weight_entries")
 @Data
-public class WeightEntry {
+public class WeightEntry extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

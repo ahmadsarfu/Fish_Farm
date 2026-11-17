@@ -22,9 +22,13 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class FeedingDashboardServiceImpl implements FeedingDashboardService {
     private final PondRepository ponds;
+    private final com.fishfarm.management.security.FarmAccess access;
     private final FeedTypeRepository types;
     private final PondFeedConfigRepository configs;
     private final DailyFeedRepository feeds;
+    private final com.fishfarm.management.service.BatchService batchService;
+    private final com.fishfarm.management.service.AuditService audit;
+    private final java.time.Clock clock;
 
     @Override
     public FeedingDashboardResponse dashboard(LocalDate date) {
@@ -33,7 +37,7 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
         Map<Long, PondFeedConfig> setup = configs.findAllWithDetails().stream()
                 .collect(Collectors.toMap(c -> c.getPond().getId(), Function.identity()));
         List<PondRow> rows = ponds.findAll().stream()
-                .filter(p -> active(p) || byPond.containsKey(p.getId()))
+                .filter(p -> (active(p) || byPond.containsKey(p.getId())) && access.canFeed(p.getId()))
                 .sorted(Comparator.comparing(Pond::getPondNumber).thenComparing(Pond::getId))
                 .map(p -> {
                     PondFeedConfig c = setup.get(p.getId());
@@ -51,12 +55,12 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
             if (row.morning().completed() || (row.active() && row.config() != null && positive(row.config().morningQtyKg()))) planned++;
             if (row.evening().completed() || (row.active() && row.config() != null && positive(row.config().eveningQtyKg()))) planned++;
         }
-        BigDecimal expense = entries.stream().map(DailyFeed::getExpense).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal expense = entries.stream().filter(f -> access.canFeed(f.getPond().getId())).map(DailyFeed::getExpense).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new FeedingDashboardResponse(date, completed, planned, expense, rows);
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public FeedingDashboardResponse configure(Long pondId, PondFeedConfigRequest request, LocalDate date) {
         Pond pond = lock(pondId);
         if (!active(pond)) throw bad("Select an active pond");
@@ -72,12 +76,17 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public FeedingDashboardResponse complete(Long pondId, FeedingTime time, FeedingSlotRequest request) {
+        access.requireFeed(pondId);
+        if ("LABOUR".equals(com.fishfarm.management.security.FarmContext.role()) && (!request.completed() || !request.date().equals(LocalDate.now(clock))))
+            throw bad("Labour can mark today's feeding only. Ask a manager for corrections.");
         Pond pond = lock(pondId);
         List<DailyFeed> existing = feeds.search(request.date(), request.date(), pondId).stream()
                 .filter(f -> f.getFeedingTime() == time).toList();
         if (!request.completed()) {
+            for (DailyFeed feed : existing) batchService.removeFeed(feed);
+            audit.record("UNDO_FEED","POND",pondId,"Removed "+time+" feeding for "+request.date());
             feeds.deleteAll(existing); feeds.flush();
             return dashboard(request.date());
         }
@@ -94,7 +103,9 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
         feed.setFeedingDate(request.date()); feed.setFeedingTime(time);
         feed.setQuantityKg(quantity); feed.setRatePerKg(type.getRatePerKg());
         feed.setExpense(quantity.multiply(type.getRatePerKg()).setScale(2, RoundingMode.HALF_UP));
-        feeds.saveAndFlush(feed);
+        feed=feeds.saveAndFlush(feed);
+        batchService.syncFeed(feed);
+        audit.record("COMPLETE_FEED","DAILY_FEED",feed.getId(),time+" "+quantity+" kg; expense "+feed.getExpense());
         return dashboard(request.date());
     }
 

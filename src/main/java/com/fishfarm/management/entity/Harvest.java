@@ -12,7 +12,7 @@ import java.util.List;
 @Entity
 @Table(name = "harvests")
 @Data
-public class Harvest {
+public class Harvest extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,7 +30,6 @@ public class Harvest {
 
     private Boolean deleted = false;
 
-    @CreationTimestamp
     @Column(updatable = false)
     private Long createdBy;
 

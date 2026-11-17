@@ -6,13 +6,13 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "feed_types")
+@Table(name = "feed_types", uniqueConstraints = @UniqueConstraint(name = "uq_feed_types_farm_key", columnNames = {"farm_id", "size_mm"}))
 @Getter
 @Setter
-public class FeedType {
+public class FeedType extends FarmOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = false)
     private Integer sizeMm;
     @Column(nullable = false, length = 100)
     private String name;

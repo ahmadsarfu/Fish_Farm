@@ -18,10 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(properties={"app.business-zone=UTC"})
+@AutoConfigureMockMvc(addFilters = false)
 @Transactional
-class DailyFeedIntegrationTests {
+class DailyFeedIntegrationTests extends LegacyDomainTestContext {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired PondRepository ponds;

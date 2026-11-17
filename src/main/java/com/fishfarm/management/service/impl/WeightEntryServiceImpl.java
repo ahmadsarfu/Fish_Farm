@@ -42,7 +42,7 @@ public class WeightEntryServiceImpl implements WeightEntryService {
         entry.setWeightKg(request.getWeightKg());
         entry.setRemarks(request.getRemarks());
         entry.setCreatedAt(LocalDateTime.now());
-        entry.setCreatedBy(1L);
+        entry.setCreatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         WeightEntry saved = repository.save(entry);
 

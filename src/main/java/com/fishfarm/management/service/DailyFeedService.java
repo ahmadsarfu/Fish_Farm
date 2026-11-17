@@ -20,10 +20,12 @@ public class DailyFeedService {
     private final FeedTypeRepository types;
     private final DailyFeedRepository feeds;
     private final PondRepository ponds;
+    private final BatchService batchService;
+    private final AuditService audit;
 
     public List<FeedType> types() { return types.findAllByOrderBySizeMmAsc(); }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public FeedType saveType(Long id, FeedTypeRequest request) {
         if (types.existsBySizeMmAndIdNot(request.sizeMm(), id == null ? -1L : id))
             throw error(HttpStatus.CONFLICT, "This feed size already exists. Edit its rate instead.");
@@ -44,7 +46,7 @@ public class DailyFeedService {
         return feeds.search(from, to, pondId).stream().map(DailyFeedResponse::from).toList();
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public DailyFeedResponse save(Long id, DailyFeedRequest request) {
         DailyFeed feed = id == null ? new DailyFeed() : feeds.findById(id)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
@@ -68,13 +70,18 @@ public class DailyFeedService {
         feed.setQuantityKg(request.quantityKg());
         feed.setExpense(request.quantityKg().multiply(feed.getRatePerKg()).setScale(2, RoundingMode.HALF_UP));
         feed.setNotes(request.notes() == null ? null : request.notes().trim());
-        return DailyFeedResponse.from(feeds.saveAndFlush(feed));
+        feed=feeds.saveAndFlush(feed);
+        batchService.syncFeed(feed);
+        audit.record("SAVE_FEED","DAILY_FEED",feed.getId(),feed.getFeedingTime()+" "+feed.getQuantityKg()+" kg; expense "+feed.getExpense());
+        return DailyFeedResponse.from(feed);
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void delete(Long id) {
         DailyFeed feed = feeds.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
         ponds.findForFeedingUpdate(feed.getPond().getId()).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Pond not found"));
+        batchService.removeFeed(feed);
+        audit.record("DELETE_FEED","DAILY_FEED",feed.getId(),"Removed feeding expense "+feed.getExpense());
         feeds.delete(feed);
     }
 

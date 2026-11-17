@@ -18,15 +18,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(properties={"app.business-zone=UTC"})
+@AutoConfigureMockMvc(addFilters = false)
 @Transactional
-class FeedingDashboardIntegrationTests {
+class FeedingDashboardIntegrationTests extends LegacyDomainTestContext {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired PondRepository ponds;
     @Autowired FeedTypeRepository types;
     @Autowired DailyFeedRepository feeds;
+    @Autowired AuditEventRepository events;
     @Autowired PondFeedConfigRepository configs;
     Pond pond;
     FeedType type;
@@ -131,10 +132,11 @@ class FeedingDashboardIntegrationTests {
             configure("2", "2");
             CountDownLatch ready = new CountDownLatch(2), start = new CountDownLatch(1);
             Callable<Integer> action = () -> {
+                com.fishfarm.management.security.FarmContext.set(1L,1L,"OWNER");
                 ready.countDown(); if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("start timeout");
-                return mvc.perform(put("/api/feeding-dashboard/{id}/slots/MORNING", pond.getId()).contentType(MediaType.APPLICATION_JSON)
+                try { return mvc.perform(put("/api/feeding-dashboard/{id}/slots/MORNING", pond.getId()).contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("date", LocalDate.now().toString(), "completed", true))))
-                        .andReturn().getResponse().getStatus();
+                        .andReturn().getResponse().getStatus(); } finally { com.fishfarm.management.security.FarmContext.clear(); }
             };
             Future<Integer> first = executor.submit(action), second = executor.submit(action);
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue(); start.countDown();
@@ -143,7 +145,10 @@ class FeedingDashboardIntegrationTests {
             assertThat(feeds.search(LocalDate.now(), LocalDate.now(), pond.getId())).hasSize(1);
         } finally {
             executor.shutdownNow();
-            feeds.deleteAll(feeds.search(LocalDate.now(), LocalDate.now(), pond.getId()));
+            var ownedFeeds=feeds.search(LocalDate.now(), LocalDate.now(), pond.getId());
+            var ids=ownedFeeds.stream().map(com.fishfarm.management.entity.DailyFeed::getId).toList();
+            events.deleteAll(events.findAll().stream().filter(e->"DAILY_FEED".equals(e.getEntityType()) && ids.contains(e.getEntityId())).toList());
+            feeds.deleteAll(ownedFeeds);
             configs.findByPondId(pond.getId()).ifPresent(configs::delete);
             ponds.deleteById(pond.getId()); types.deleteById(type.getId());
         }

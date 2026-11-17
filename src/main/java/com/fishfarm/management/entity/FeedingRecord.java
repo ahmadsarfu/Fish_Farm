@@ -9,7 +9,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "feeding_records", uniqueConstraints = @UniqueConstraint(name = "uq_pond_date_slot", columnNames = {"pond_id", "feeding_date", "feeding_slot"}))
 @Data
-public class FeedingRecord {
+public class FeedingRecord extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

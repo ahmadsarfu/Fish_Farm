@@ -24,6 +24,8 @@ public class FishStockEntryServiceImpl
     private final FishStockEntryRepository repository;
     private final FishTypeRepository fishTypeRepository;
     private final PondRepository pondRepository;
+    private final com.fishfarm.management.repository.FishBatchRepository batches;
+    private final com.fishfarm.management.repository.BatchStageRepository stages;
 
     @Override
     public FishStockEntryResponse create(
@@ -37,11 +39,12 @@ public class FishStockEntryServiceImpl
                 );
 
         Pond pond = pondRepository
-                .findById(request.getPondId())
+                .findForFeedingUpdate(request.getPondId())
                 .orElseThrow(() ->
                         new RuntimeException("Pond not found")
                 );
 
+        if(stages.findByPondIdAndCurrentCountGreaterThan(pond.getId(),0).isPresent())throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"This pond already has an active batch. Use an empty pond for new stocking; mixed batches are not supported.");
         validateSize(request);
 
         FishStockEntry entry = new FishStockEntry();
@@ -59,7 +62,7 @@ public class FishStockEntryServiceImpl
         entry.setSupplierName(request.getSupplierName());
         entry.setRemarks(request.getRemarks());
 
-        entry.setCreatedBy(1L);
+        entry.setCreatedBy(com.fishfarm.management.security.FarmContext.userId());
         entry.setDeleted(false);
 
         return mapToResponse(repository.save(entry));
@@ -94,6 +97,7 @@ public class FishStockEntryServiceImpl
             Long id,
             FishStockEntryRequest request
     ) {
+        if(batches.existsByStockEntryId(id))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"This stock entry belongs to a batch. Use batch operations to preserve its counts and costs.");
 
         FishStockEntry entry = repository
                 .findByIdAndDeletedFalse(id)
@@ -108,11 +112,12 @@ public class FishStockEntryServiceImpl
                 );
 
         Pond pond = pondRepository
-                .findById(request.getPondId())
+                .findForFeedingUpdate(request.getPondId())
                 .orElseThrow(() ->
                         new RuntimeException("Pond not found")
                 );
 
+        if(stages.findByPondIdAndCurrentCountGreaterThan(pond.getId(),0).isPresent())throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"This pond already has an active batch. Use an empty pond for new stocking; mixed batches are not supported.");
         validateSize(request);
 
         entry.setFishType(fishType);
@@ -128,13 +133,14 @@ public class FishStockEntryServiceImpl
         entry.setSupplierName(request.getSupplierName());
         entry.setRemarks(request.getRemarks());
 
-        entry.setUpdatedBy(1L);
+        entry.setUpdatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         return mapToResponse(repository.save(entry));
     }
 
     @Override
     public void delete(Long id) {
+        if(batches.existsByStockEntryId(id))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"This stock entry belongs to a batch and cannot be deleted.");
 
         FishStockEntry entry = repository
                 .findByIdAndDeletedFalse(id)
@@ -143,7 +149,7 @@ public class FishStockEntryServiceImpl
                 );
 
         entry.setDeleted(true);
-        entry.setUpdatedBy(1L);
+        entry.setUpdatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         repository.save(entry);
     }

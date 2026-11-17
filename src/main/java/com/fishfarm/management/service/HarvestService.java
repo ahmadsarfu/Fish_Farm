@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface HarvestService {
 
+    HarvestResponse createForBatch(HarvestRequest request);
+
     HarvestResponse create(HarvestRequest request);
 
     List<HarvestResponse> getAll();

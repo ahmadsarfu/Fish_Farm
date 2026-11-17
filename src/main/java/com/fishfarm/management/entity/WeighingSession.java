@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "weighing_sessions", uniqueConstraints = {@UniqueConstraint(name = "uq_dispatch_fish", columnNames = {"dispatch_id", "fish_type_id"})})
 @Data
-public class WeighingSession {
+public class WeighingSession extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,7 +29,6 @@ public class WeighingSession {
 
     private Boolean isClosed = false;
 
-    @CreationTimestamp
     @Column(updatable = false)
     private Long createdBy;
 

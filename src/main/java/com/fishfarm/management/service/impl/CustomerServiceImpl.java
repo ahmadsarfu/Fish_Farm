@@ -39,7 +39,7 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setGstNumber(request.getGstNumber());
         customer.setCustomerType(request.getCustomerType());
 
-        customer.setCreatedBy(1L);
+        customer.setCreatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         return map(repository.save(customer));
     }
@@ -90,7 +90,7 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setAddress(request.getAddress());
         customer.setGstNumber(request.getGstNumber());
         customer.setCustomerType(request.getCustomerType());
-        customer.setUpdatedBy(1L);
+        customer.setUpdatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         return map(repository.save(customer));
     }
@@ -104,7 +104,7 @@ public class CustomerServiceImpl implements CustomerService {
                 );
 
         customer.setDeleted(true);
-        customer.setUpdatedBy(1L);
+        customer.setUpdatedBy(com.fishfarm.management.security.FarmContext.userId());
 
         repository.save(customer);
     }

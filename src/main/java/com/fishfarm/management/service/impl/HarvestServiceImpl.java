@@ -14,16 +14,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 @RequiredArgsConstructor
 public class HarvestServiceImpl implements HarvestService {
 
     private final HarvestRepository harvestRepository;
+    private final BatchStageRepository batchStages;
+    private final BatchMovementRepository batchMovements;
     private final PondRepository pondRepository;
     private final FishTypeRepository fishTypeRepository;
     private final InventoryRepository inventoryRepository;
 
     @Override
     public HarvestResponse create(HarvestRequest request) {
+        pondRepository.findForFeedingUpdate(request.getPondId()).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"Pond not found"));
+        if(batchStages.findByPondIdAndCurrentCountGreaterThan(request.getPondId(),0).isPresent())
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"This pond has an active batch. Record its harvest in Batches to update fish counts and costing.");
+        return createForBatch(request);
+    }
+
+    @Override
+    public HarvestResponse createForBatch(HarvestRequest request) {
 
         Pond pond = pondRepository.findById(request.getPondId()).orElseThrow(() -> new RuntimeException("Pond not found"));
 
@@ -107,6 +118,7 @@ public class HarvestServiceImpl implements HarvestService {
 
     @Override
     public void delete(Long id) {
+        if(batchMovements.existsByHarvestId(id))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"A batch harvest cannot be deleted from this page; its count and cost ledger must remain intact.");
 
         Harvest harvest = harvestRepository.findById(id).orElseThrow(() -> new RuntimeException("Harvest not found"));
 

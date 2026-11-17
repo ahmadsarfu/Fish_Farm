@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @Table(name = "daily_feeds", uniqueConstraints = @UniqueConstraint(name = "uq_daily_feed", columnNames = {"pond_id", "feeding_date", "feeding_time", "feed_type_id"}))
 @Getter
 @Setter
-public class DailyFeed {
+public class DailyFeed extends FarmOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

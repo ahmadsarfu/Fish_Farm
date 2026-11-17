@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "customers")
 @Data
-public class Customer {
+public class Customer extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

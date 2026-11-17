@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "pond_feed_configs", uniqueConstraints = @UniqueConstraint(name = "uq_pond_feed_config", columnNames = "pond_id"))
 @Data
-public class PondFeedConfig {
+public class PondFeedConfig extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

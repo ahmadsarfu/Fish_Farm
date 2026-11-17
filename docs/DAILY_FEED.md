@@ -98,3 +98,11 @@ and expect the feed tables to exist. Run `npm ci`, `npm run build` and `npm run 
 in Fish_Farm_UI. The UI manifest now declares its existing invoice import `jspdf`.
 
 The checklist concurrent-tap test commits isolated fixtures to exercise separate MySQL connections, then removes its own fixtures. The suite expects an empty disposable feed database.
+
+## Login and batch tracking
+
+See [Farm and Batch Setup](FARM_BATCH_SETUP.md) before upgrading to the authenticated
+release. Requests now require a farm session and CSRF token. Feeding costs link to
+the current batch stage when a batch is active; transferred/harvested costs are
+protected from retroactive edits. Existing-data ownership requires the one-time
+setup procedure described in that guide.

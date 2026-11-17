@@ -7,15 +7,15 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "ponds")
+@Table(name = "ponds", uniqueConstraints = @UniqueConstraint(name = "uq_ponds_farm_key", columnNames = {"farm_id", "pond_number"}))
 @Data
-public class Pond {
+public class Pond extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "pond_number", nullable = false, unique = true)
+    @Column(name = "pond_number", nullable = false, unique = false)
     private String pondNumber;
 
     @Column(name = "pond_name", nullable = false)

@@ -27,7 +27,7 @@ class FeedingDashboardLegacyRateTests {
         when(ponds.findForFeedingUpdate(1L)).thenReturn(Optional.of(pond));
         when(feeds.search(date, date, 1L)).thenReturn(List.of());
         when(configs.findByPondId(1L)).thenReturn(Optional.of(config));
-        FeedingDashboardServiceImpl service = new FeedingDashboardServiceImpl(ponds, types, configs, feeds);
+        FeedingDashboardServiceImpl service = new FeedingDashboardServiceImpl(ponds, new com.fishfarm.management.security.FarmAccess(mock(PondAssignmentRepository.class)), types, configs, feeds, mock(com.fishfarm.management.service.BatchService.class), mock(com.fishfarm.management.service.AuditService.class), java.time.Clock.systemUTC());
         assertThatThrownBy(() -> service.complete(1L, FeedingTime.MORNING, new FeedingSlotRequest(date, true)))
                 .isInstanceOf(ResponseStatusException.class).hasMessageContaining("Set a feed rate greater than zero");
         verify(feeds, never()).saveAndFlush(any());

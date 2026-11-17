@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "harvest_items")
 @Data
-public class HarvestItem {
+public class HarvestItem extends FarmOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +27,6 @@ public class HarvestItem {
 
     private BigDecimal weightKg;
 
-    @CreationTimestamp
     @Column(updatable = false)
     private Long createdBy;
 

@@ -52,14 +52,14 @@ public class DispatchServiceImpl implements DispatchService {
 
         dispatch.setDispatchDate(request.getDispatchDate());
 
-        dispatch.setCreatedBy(1L);
+        dispatch.setCreatedBy(com.fishfarm.management.security.FarmContext.userId());
         dispatch.setStatus(DispatchStatus.CREATED);
 
 //        dispatch.setDriverName(request.getDriverName());
 
         dispatch.setDispatchDate(request.getDispatchDate());
 
-        dispatch.setCreatedBy(1L);
+        dispatch.setCreatedBy(com.fishfarm.management.security.FarmContext.userId());
 
 //        dispatch.setDriverPhone(request.getDriverPhone());
 
