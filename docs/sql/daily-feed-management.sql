@@ -40,3 +40,19 @@ CREATE TABLE IF NOT EXISTS daily_feeds (
 -- FROM daily_feeds f JOIN ponds p ON p.id = f.pond_id
 -- WHERE f.feeding_date BETWEEN '2026-11-01' AND '2026-11-30'
 -- GROUP BY f.feeding_date, p.id, p.pond_name;
+
+
+-- One persisted feeding setup per pond. Existing legacy tables are retained.
+CREATE TABLE IF NOT EXISTS pond_feed_configs (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    pond_id BIGINT NOT NULL,
+    feed_type_id BIGINT NOT NULL,
+    morning_qty_kg DECIMAL(10,3) NOT NULL,
+    evening_qty_kg DECIMAL(10,3) NOT NULL,
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT uq_pond_feed_config UNIQUE (pond_id),
+    CONSTRAINT fk_pond_feed_config_pond FOREIGN KEY (pond_id) REFERENCES ponds(id),
+    CONSTRAINT fk_pond_feed_config_type FOREIGN KEY (feed_type_id) REFERENCES feed_types(id),
+    CONSTRAINT ck_pond_morning_qty CHECK (morning_qty_kg >= 0),
+    CONSTRAINT ck_pond_evening_qty CHECK (evening_qty_kg >= 0)
+) ENGINE=InnoDB;

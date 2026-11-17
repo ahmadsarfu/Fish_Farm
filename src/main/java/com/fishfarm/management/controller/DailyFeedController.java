@@ -3,6 +3,8 @@ package com.fishfarm.management.controller;
 import com.fishfarm.management.dto.*;
 import com.fishfarm.management.entity.FeedType;
 import com.fishfarm.management.service.DailyFeedService;
+import com.fishfarm.management.service.FeedingDashboardService;
+import com.fishfarm.management.enums.FeedingTime;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +22,24 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DailyFeedController {
     private final DailyFeedService service;
+    private final FeedingDashboardService dashboardService;
+
+    @GetMapping("/feeding-dashboard")
+    public FeedingDashboardResponse dashboard(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return dashboardService.dashboard(date);
+    }
+
+    @PutMapping("/pond-feed-configs/{pondId}")
+    public FeedingDashboardResponse configure(@PathVariable Long pondId, @Valid @RequestBody PondFeedConfigRequest request,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return dashboardService.configure(pondId, request, date);
+    }
+
+    @PutMapping("/feeding-dashboard/{pondId}/slots/{time}")
+    public FeedingDashboardResponse complete(@PathVariable Long pondId, @PathVariable FeedingTime time,
+            @Valid @RequestBody FeedingSlotRequest request) {
+        return dashboardService.complete(pondId, time, request);
+    }
 
     @GetMapping("/feed-types")
     public List<FeedType> types() { return service.types(); }

@@ -48,7 +48,7 @@ public class DailyFeedService {
     public DailyFeedResponse save(Long id, DailyFeedRequest request) {
         DailyFeed feed = id == null ? new DailyFeed() : feeds.findById(id)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
-        Pond pond = ponds.findById(request.pondId())
+        Pond pond = ponds.findForFeedingUpdate(request.pondId())
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Pond not found"));
         FeedType type = types.findById(request.feedTypeId())
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feed type not found"));
@@ -74,6 +74,7 @@ public class DailyFeedService {
     @Transactional
     public void delete(Long id) {
         DailyFeed feed = feeds.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
+        ponds.findForFeedingUpdate(feed.getPond().getId()).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Pond not found"));
         feeds.delete(feed);
     }
 

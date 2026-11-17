@@ -6,7 +6,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "pond_feed_configs")
+@Table(name = "pond_feed_configs", uniqueConstraints = @UniqueConstraint(name = "uq_pond_feed_config", columnNames = "pond_id"))
 @Data
 public class PondFeedConfig {
 
@@ -22,9 +22,9 @@ public class PondFeedConfig {
     @JoinColumn(name = "feed_type_id", nullable = false)
     private FeedType feedType;
 
-    @Column(name = "morning_qty_kg")
+    @Column(name = "morning_qty_kg", nullable = false, precision = 10, scale = 3)
     private BigDecimal morningQtyKg;
 
-    @Column(name = "evening_qty_kg")
+    @Column(name = "evening_qty_kg", nullable = false, precision = 10, scale = 3)
     private BigDecimal eveningQtyKg;
 }
