@@ -42,4 +42,8 @@ public class Dispatch {
     private LocalDateTime updatedAt;
 
     private String driverPhone;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
 }

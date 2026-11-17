@@ -23,4 +23,8 @@ public class DispatchResponse {
     private DispatchStatus status;
 
     private String driverPhone;
+
+    private Long customerId;
+    private String customerName;
+    private String customerMobile;
 }

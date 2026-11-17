@@ -2,28 +2,38 @@ package com.fishfarm.management.service.impl;
 
 import com.fishfarm.management.dto.DispatchRequest;
 import com.fishfarm.management.dto.DispatchResponse;
+import com.fishfarm.management.entity.Customer;
 import com.fishfarm.management.entity.Dispatch;
 import com.fishfarm.management.entity.WeighingSession;
 import com.fishfarm.management.enums.DispatchStatus;
+import com.fishfarm.management.repository.CustomerRepository;
 import com.fishfarm.management.repository.DispatchRepository;
 import com.fishfarm.management.repository.WeighingSessionRepository;
 import com.fishfarm.management.service.DispatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class DispatchServiceImpl implements DispatchService {
 
     private final DispatchRepository repository;
 
     private final WeighingSessionRepository weighingSessionRepository;
 
+    private final CustomerRepository customerRepository;
+
     @Override
     public DispatchResponse create(DispatchRequest request) {
+
+        Customer customer = customerRepository.findByIdAndDeletedFalse(request.getCustomerId()).orElseThrow(() ->
+                        new RuntimeException("Customer not found")
+                );
 
         Dispatch dispatch = new Dispatch();
 
@@ -31,15 +41,31 @@ public class DispatchServiceImpl implements DispatchService {
 
         dispatch.setVehicleNumber(request.getVehicleNumber());
 
-        dispatch.setDriverName(request.getDriverName());
+        dispatch.setCustomer(customer);
+
+        dispatch.setVehicleNumber(request.getVehicleNumber());
+
+// Temporary compatibility:
+// customer hi contact/driver hai
+        dispatch.setDriverName(customer.getName());
+        dispatch.setDriverPhone(customer.getMobile());
+
+        dispatch.setDispatchDate(request.getDispatchDate());
+
+        dispatch.setCreatedBy(1L);
+        dispatch.setStatus(DispatchStatus.CREATED);
+
+//        dispatch.setDriverName(request.getDriverName());
 
         dispatch.setDispatchDate(request.getDispatchDate());
 
         dispatch.setCreatedBy(1L);
 
-        dispatch.setDriverPhone(request.getDriverPhone());
+//        dispatch.setDriverPhone(request.getDriverPhone());
 
         dispatch.setStatus(DispatchStatus.CREATED);
+
+        dispatch.setCustomer(customer);
 
         Dispatch saved = repository.save(dispatch);
 
@@ -113,8 +139,34 @@ public class DispatchServiceImpl implements DispatchService {
     }
 
 
+
     private DispatchResponse mapToResponse(Dispatch dispatch) {
 
-        return DispatchResponse.builder().id(dispatch.getId()).dispatchNumber(dispatch.getDispatchNumber()).driverPhone(dispatch.getDriverPhone()).vehicleNumber(dispatch.getVehicleNumber()).driverName(dispatch.getDriverName()).dispatchDate(dispatch.getDispatchDate()).status(dispatch.getStatus()).build();
+        return DispatchResponse.builder()
+                .id(dispatch.getId())
+                .dispatchNumber(dispatch.getDispatchNumber())
+                .vehicleNumber(dispatch.getVehicleNumber())
+                .driverName(dispatch.getDriverName())
+                .driverPhone(dispatch.getDriverPhone())
+                .dispatchDate(dispatch.getDispatchDate())
+                .status(dispatch.getStatus())
+
+                .customerId(
+                        dispatch.getCustomer() != null
+                                ? dispatch.getCustomer().getId()
+                                : null
+                )
+                .customerName(
+                        dispatch.getCustomer() != null
+                                ? dispatch.getCustomer().getName()
+                                : null
+                )
+                .customerMobile(
+                        dispatch.getCustomer() != null
+                                ? dispatch.getCustomer().getMobile()
+                                : null
+                )
+
+                .build();
     }
 }

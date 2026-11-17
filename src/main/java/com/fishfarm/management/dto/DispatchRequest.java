@@ -13,11 +13,14 @@ public class DispatchRequest {
     @NotBlank
     private String vehicleNumber;
 
-    @NotBlank
-    private String driverName;
+//    @NotBlank
+//    private String driverName;
 
     @NotNull
     private LocalDate dispatchDate;
 
-    private String driverPhone;
+//    private String driverPhone;
+
+    @NotNull
+    private Long customerId;
 }
