@@ -184,3 +184,6 @@ This is the initial self-use/single-server foundation. Sessions and throttling a
 in-memory. Multiple API replicas need shared sessions/throttling. Subscription billing,
 email verification/password recovery, offline authenticated operations, mixed-batch
 pond allocations, and automatic invoice reconciliation are future work.
+
+For customer invitations, plans and the separate Super Admin panel, continue with
+[Platform Setup](PLATFORM_SETUP.md) after the farm/batch migration.

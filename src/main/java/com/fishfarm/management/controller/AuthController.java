@@ -18,8 +18,10 @@ public class AuthController {
     private final AuthService service;
     private final CookieCsrfTokenRepository tokens;
     private final LoginThrottle throttle;
+    private final com.fishfarm.management.service.PlatformCustomerService provisioning;
+    @org.springframework.beans.factory.annotation.Value("${app.public-registration-enabled:true}") private boolean publicRegistration;
     @GetMapping("/csrf") public Map<String,String> csrf(CsrfToken token) { return Map.of("token",token.getToken()); }
-    @GetMapping("/setup-status") public Map<String,Boolean> setup() { return Map.of("legacyClaimAvailable",service.legacyClaimAvailable(),"legacyDataWaiting",service.legacyDataWaiting()); }
+    @GetMapping("/setup-status") public Map<String,Boolean> setup() { return Map.of("legacyClaimAvailable",service.legacyClaimAvailable(),"legacyDataWaiting",service.legacyDataWaiting(),"publicRegistrationEnabled",publicRegistration); }
     @PostMapping("/login") public Map<String,Object> login(@Valid @RequestBody Login body,HttpServletRequest request,HttpServletResponse response) {
         String key="login:"+request.getRemoteAddr()+":"+body.username().toLowerCase(Locale.ROOT);throttle.check(key);
         try { FarmPrincipal p=service.login(body);throttle.success(key);return signIn(p,request,response); }
@@ -28,6 +30,12 @@ public class AuthController {
     @PostMapping("/register") public Map<String,Object> register(@Valid @RequestBody Register body,HttpServletRequest request,HttpServletResponse response) {
         String key="register:"+request.getRemoteAddr();throttle.check(key);throttle.failure(key);
         return signIn(service.register(body),request,response);
+    }
+    @PostMapping("/invitation") public Map<String,Object> invitation(@Valid @RequestBody com.fishfarm.management.dto.PlatformRequests.InvitationToken body,HttpServletRequest request) {
+        String key="invitation:"+request.getRemoteAddr();throttle.check(key);throttle.failure(key);return provisioning.invitation(body.token());
+    }
+    @PostMapping("/activate") public Map<String,Object> activate(@Valid @RequestBody com.fishfarm.management.dto.PlatformRequests.Activate body,HttpServletRequest request,HttpServletResponse response) {
+        String key="activate:"+request.getRemoteAddr();throttle.check(key);throttle.failure(key);return signIn(provisioning.activate(body),request,response);
     }
     @GetMapping("/me") public Map<String,Object> me(org.springframework.security.core.Authentication auth) { return service.me((FarmPrincipal)auth.getPrincipal()); }
     @PostMapping("/select-farm") public Map<String,Object> select(@Valid @RequestBody SelectFarm body,org.springframework.security.core.Authentication auth,HttpServletRequest request,HttpServletResponse response) {

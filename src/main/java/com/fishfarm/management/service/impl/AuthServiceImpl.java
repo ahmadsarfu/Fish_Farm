@@ -26,6 +26,10 @@ public class AuthServiceImpl implements AuthService {
     private final java.time.Clock clock;
     private final com.fishfarm.management.service.AuditService audit;
     @Value("${app.legacy-setup-token:}") private String setupToken;
+    private final com.fishfarm.management.platform.ContactIdentity contacts;
+    private final com.fishfarm.management.platform.PlatformMfa mfa;
+    private final com.fishfarm.management.platform.SubscriptionAccess subscription;
+    @Value("${app.public-registration-enabled:true}") private boolean publicRegistration;
     private String dummyHash;
     @jakarta.annotation.PostConstruct void prepareDummyHash() { dummyHash=encoder.encode(UUID.randomUUID().toString()); }
     private String name(String username) { return username.trim().toLowerCase(Locale.ROOT); }
@@ -36,17 +40,24 @@ public class AuthServiceImpl implements AuthService {
     public boolean legacyDataWaiting() { return farmRepository.existsByLegacyClaimableTrue(); }
     public boolean legacyClaimAvailable() { return !setupToken.isBlank() && farmRepository.existsByLegacyClaimableTrue(); }
     public FarmPrincipal login(Login request) {
-        AppAccount account=accounts.findByUsername(name(request.username())).orElse(null);
+        String identity=name(request.username());
+        AppAccount account=accounts.findByUsername(identity).orElseGet(()->accounts.findByEmail(identity).orElse(null));
+        if(account==null) {try {account=accounts.findByMobile(contacts.mobile(identity)).orElse(null);} catch(ResponseStatusException ignored) { /* Not a phone: keep generic login error. */ }}
         boolean matches=request.password().getBytes(StandardCharsets.UTF_8).length<=72 && encoder.matches(request.password(),account==null?dummyHash:account.getPasswordHash());
         if(account==null || !account.isActive() || !matches)
             throw error(HttpStatus.UNAUTHORIZED,"Invalid username or password");
+        if(account.isPlatformAdmin()) {
+            if(!mfa.verify(request.otp()))throw error(HttpStatus.UNAUTHORIZED,"Invalid admin credentials or authenticator code");
+            return new FarmPrincipal(account.getId(),account.getUsername(),null,"SUPER_ADMIN",account.getSessionVersion());
+        }
         FarmMember member=members.findByAccountIdAndActiveTrueOrderByIdAsc(account.getId()).stream().filter(m->m.getFarm().isActive()).findFirst()
                 .orElseThrow(()->error(HttpStatus.FORBIDDEN,"No active farm membership"));
         return principal(member);
     }
     @Transactional public FarmPrincipal register(Register request) {
+        if(!publicRegistration && !request.claimExisting())throw error(HttpStatus.FORBIDDEN,"New farms are activated through an invitation from your provider.");
         validPassword(request.password());
-        if(accounts.existsByUsername(name(request.username()))) throw error(HttpStatus.CONFLICT,"This username is unavailable");
+        contacts.requireUsernameAvailable(name(request.username()));
         Farm farm;
         if(request.claimExisting()) {
             if(setupToken.isBlank() || request.setupToken()==null || !MessageDigest.isEqual(setupToken.getBytes(StandardCharsets.UTF_8),request.setupToken().getBytes(StandardCharsets.UTF_8)))
@@ -76,10 +87,18 @@ public class AuthServiceImpl implements AuthService {
     }
     public Map<String,Object> me(FarmPrincipal principal) {
         AppAccount account=accounts.findById(principal.userId()).orElseThrow();
-        return Map.of("id",account.getId(),"username",account.getUsername(),"displayName",account.getDisplayName(),"farmId",principal.farmId(),"role",principal.role(),"farms",farms(account.getId()),"timeZone",clock.getZone().getId(),"businessDate",java.time.LocalDate.now(clock).toString());
+        Map<String,Object> result=new LinkedHashMap<>();
+        result.put("id",account.getId());result.put("username",account.getUsername());result.put("displayName",account.getDisplayName());result.put("farmId",principal.farmId());result.put("role",principal.role());
+        result.put("farms",account.isPlatformAdmin()?List.of():farms(account.getId()));result.put("timeZone",clock.getZone().getId());result.put("businessDate",java.time.LocalDate.now(clock).toString());
+        result.put("mobile",account.getMobile());result.put("email",account.getEmail());
+        if(principal.farmId()!=null)result.put("subscription",subscription.summary(farmRepository.findById(principal.farmId()).orElseThrow()));
+        return result;
     }
     @Transactional public void createFarm(Long accountId,String name) {
-        Farm farm=new Farm();farm.setName(name.trim());farm=farmRepository.saveAndFlush(farm);
+        boolean managed=members.findByAccountIdAndActiveTrueOrderByIdAsc(accountId).stream().anyMatch(m->m.getFarm().isManagedSubscription());
+        Farm farm=new Farm();farm.setName(name.trim());
+        if(managed) {farm.setManagedSubscription(true);farm.setPlanName("Awaiting activation");farm.setSubscriptionStatus("SUSPENDED");farm.setPondLimit(1);farm.setUserLimit(1);}
+        farm=farmRepository.saveAndFlush(farm);
         FarmMember member=new FarmMember();member.setFarm(farm);member.setAccount(accounts.findById(accountId).orElseThrow());member.setRole("OWNER");members.save(member);
     }
     public List<Map<String,Object>> team() {
@@ -90,8 +109,9 @@ public class AuthServiceImpl implements AuthService {
         }).toList();
     }
     @Transactional public void createMember(NewMember request) {
+        subscription.requireMemberCapacity();
         validPassword(request.password());
-        if(accounts.existsByUsername(name(request.username()))) throw error(HttpStatus.CONFLICT,"This username is unavailable");
+        contacts.requireUsernameAvailable(name(request.username()));
         List<Pond> selected=selectedPonds(request.pondIds());
         AppAccount account=new AppAccount();account.setUsername(name(request.username()));account.setDisplayName(request.displayName().trim());account.setPasswordHash(encoder.encode(request.password()));account=accounts.saveAndFlush(account);
         FarmMember member=new FarmMember();member.setAccount(account);member.setFarm(farmRepository.findById(FarmContext.farmId()).orElseThrow());member.setRole(request.role());members.saveAndFlush(member);
@@ -101,6 +121,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional public void updateMember(Long id,UpdateMember request) {
         FarmMember member=members.findById(id).filter(m->m.getFarm().getId().equals(FarmContext.farmId())).orElseThrow(()->error(HttpStatus.NOT_FOUND,"Member not found"));
         if("OWNER".equals(member.getRole())) throw error(HttpStatus.BAD_REQUEST,"Owner access cannot be changed here");
+        if(!member.isActive() && request.active())subscription.requireMemberCapacity();
         List<Pond> selected=selectedPonds(request.pondIds());
         member.setActive(request.active());member.setRole(request.role());assignments.deleteByAccountId(member.getAccount().getId());assignments.flush();assign(member.getAccount().getId(),selected);
         audit.record("UPDATE_ACCESS","ACCOUNT",member.getAccount().getId(),request.role()+"; active="+request.active());

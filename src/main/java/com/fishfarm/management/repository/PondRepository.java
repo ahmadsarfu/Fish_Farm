@@ -16,6 +16,8 @@ public interface PondRepository extends JpaRepository<Pond, Long> {
     @Query("select p from Pond p where p.id = :id")
     Optional<Pond> findForFeedingUpdate(@Param("id") Long id);
 
+    long countByDeletedFalse();
+
     boolean existsByPondNumber(String pondNumber);
 
     List<Pond> findByDeletedFalse();

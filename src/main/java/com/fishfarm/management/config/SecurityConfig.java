@@ -31,14 +31,15 @@ public class SecurityConfig {
         config.setAllowedHeaders(List.of("Content-Type","X-XSRF-TOKEN")); config.setMaxAge(3600L);
         var source=new UrlBasedCorsConfigurationSource(); source.registerCorsConfiguration("/**",config); return source;
     }
-    @Bean SecurityFilterChain api(HttpSecurity http, CookieCsrfTokenRepository tokens, FarmMemberRepository members, CorsConfigurationSource corsSource) throws Exception {
+    @Bean SecurityFilterChain api(HttpSecurity http, CookieCsrfTokenRepository tokens, FarmMemberRepository members, CorsConfigurationSource corsSource, com.fishfarm.management.repository.AppAccountRepository accounts, com.fishfarm.management.platform.SubscriptionAccess subscriptions) throws Exception {
         http.cors(cors -> cors.configurationSource(corsSource)).csrf(csrf -> csrf.csrfTokenRepository(tokens).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
             .formLogin(form -> form.disable()).httpBasic(basic -> basic.disable())
             .requestCache(cache -> cache.disable())
-            .addFilterBefore(new FarmRequestFilter(members), AuthorizationFilter.class)
+            .addFilterBefore(new FarmRequestFilter(members,accounts,subscriptions), AuthorizationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
-                .requestMatchers("/api/auth/csrf","/api/auth/login","/api/auth/register","/api/auth/setup-status").permitAll()
+                .requestMatchers("/api/auth/csrf","/api/auth/login","/api/auth/register","/api/auth/setup-status","/api/auth/invitation","/api/auth/activate").permitAll()
+                .requestMatchers("/api/platform/**").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.POST,"/api/auth/farms").hasRole("OWNER")
                 .requestMatchers("/api/auth/**").authenticated()
                 .requestMatchers("/api/team/**").hasRole("OWNER")

@@ -2,7 +2,7 @@ package com.fishfarm.management.dto;
 import jakarta.validation.constraints.*;
 import java.util.List;
 public final class AuthRequests {
-    public record Login(@NotBlank @Size(max=120) String username,@NotBlank @Size(max=72) String password) {}
+    public record Login(@NotBlank @Size(max=254) String username,@NotBlank @Size(max=72) String password,@Size(max=6) String otp) {}
     public record Register(@NotBlank @Size(max=120) String displayName,
             @NotBlank @Size(min=3,max=120) @Pattern(regexp="[A-Za-z0-9._@+\\-]+") String username,
             @NotBlank @Size(min=10,max=72) String password,

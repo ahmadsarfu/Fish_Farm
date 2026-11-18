@@ -21,3 +21,5 @@ Batch costing tracks nursery/grow-out, mortality, partial transfers, feed snapsh
 other costs, harvest/inventory and manually recorded sale settlements. It does not
 double-count carried cost. Initial scope is self-use on a single server; billing,
 password-recovery email and automatic invoice allocation are not included.
+
+Commercial onboarding and Super Admin setup: [Platform Setup](docs/PLATFORM_SETUP.md).

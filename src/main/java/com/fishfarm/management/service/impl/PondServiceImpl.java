@@ -16,11 +16,14 @@ import java.util.List;
 public class PondServiceImpl implements PondService {
 
     private final PondRepository pondRepository;
+    private final com.fishfarm.management.platform.SubscriptionAccess subscription;
     private final com.fishfarm.management.security.FarmAccess access;
     private final com.fishfarm.management.repository.BatchStageRepository stages;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public PondResponse create(PondRequest request) {
+        subscription.requirePondCapacity();
 
         if (pondRepository.existsByPondNumber(request.getPondNumber())) {
             throw new RuntimeException("Pond number already exists");

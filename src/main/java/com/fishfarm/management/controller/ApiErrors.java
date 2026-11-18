@@ -14,6 +14,8 @@ public class ApiErrors {
     @ExceptionHandler(DataIntegrityViolationException.class) public ResponseEntity<?> integrity() { return ResponseEntity.status(409).body(Map.of("message","A matching record already exists, or this record is still in use")); }
     @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
     public ResponseEntity<?> malformed(Exception e) { return ResponseEntity.badRequest().body(Map.of("message","Invalid request body or parameter")); }
+    @ExceptionHandler({jakarta.validation.ConstraintViolationException.class,org.springframework.web.method.annotation.HandlerMethodValidationException.class})
+    public ResponseEntity<?> parameters(Exception e) {return ResponseEntity.badRequest().body(Map.of("message","One or more request parameters are invalid"));}
     @ExceptionHandler(RuntimeException.class) public ResponseEntity<?> legacy(RuntimeException e) {
         String message=Objects.requireNonNullElse(e.getMessage(),"");
         if(message.toLowerCase(Locale.ROOT).endsWith("not found"))return ResponseEntity.status(404).body(Map.of("message",message));

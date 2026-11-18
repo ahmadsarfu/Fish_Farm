@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 umask 077
 mkdir -p .local
+if [ -f .local/platform.env ]; then source .local/platform.env; fi
 # This code can claim existing farm 1 only while it has no owner.
 # Read .local/farm-setup-code locally and enter it in the setup form; never commit it.
 if [ -z "${FARM_SETUP_TOKEN:-}" ]; then
