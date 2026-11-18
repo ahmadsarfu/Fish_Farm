@@ -15,7 +15,13 @@ mysql -u root -p fish_farm_db < docs/sql/platform-onboarding-upgrade.sql
 
 Run this after the previous farm/batch migration. For a fresh installation, run
 `docs/sql/schema-full.sql` against an empty database, then run the platform upgrade.
-The platform upgrade is repeatable. Existing farms retain active Legacy access
+The platform upgrade is repeatable. It also repairs a manually created
+`platformAdmin` column by renaming it to the backend's `platform_admin`, preserving
+existing true/false flags and treating null as false. It widens email to 254
+characters, matches mobile to 16 characters and creates unique contact indexes.
+If contacts are duplicated/too long, or both admin columns disagree, it stops
+with a diagnostic message rather than deleting/truncating data or changing privileges.
+Do not use the MySQL `--force` option when applying it. Existing farms retain active Legacy access
 without limits or expiry; existing usernames and passwords keep working. No real
 customer database is migrated by the development/test commands in this repository.
 
