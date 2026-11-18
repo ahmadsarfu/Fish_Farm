@@ -34,3 +34,6 @@ build/
 
 # Local setup code and machine-specific files
 .local/
+
+# Python maintenance-script bytecode
+__pycache__/

@@ -148,3 +148,7 @@ The platform integration tests use a dedicated MySQL database. Run the existing
 backend test suite with that test datasource; never point test commands at the
 real customer database. Frontend `npm run test:e2e` uses API fixtures; the manual
 browser smoke can additionally be run against a disposable API/database.
+
+To intentionally clear a local database and try the complete flow with one new
+customer, use [Fresh Walkthrough](FRESH_WALKTHROUGH.md). The reset takes a backup
+before rebuilding only `fish_farm_db`; it is not an upgrade command.
