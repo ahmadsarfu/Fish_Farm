@@ -58,6 +58,8 @@ public class AuthServiceImpl implements AuthService {
         if(!publicRegistration && !request.claimExisting())throw error(HttpStatus.FORBIDDEN,"New farms are activated through an invitation from your provider.");
         validPassword(request.password());
         contacts.requireUsernameAvailable(name(request.username()));
+        String mobile=contacts.mobile(request.mobile()),email=contacts.email(request.email());
+        contacts.requireAvailable(email,mobile);
         Farm farm;
         if(request.claimExisting()) {
             if(setupToken.isBlank() || request.setupToken()==null || !MessageDigest.isEqual(setupToken.getBytes(StandardCharsets.UTF_8),request.setupToken().getBytes(StandardCharsets.UTF_8)))
@@ -71,6 +73,7 @@ public class AuthServiceImpl implements AuthService {
             farm=new Farm(); farm.setName(request.farmName().trim()); farm=farmRepository.saveAndFlush(farm);
         }
         AppAccount account=new AppAccount();account.setUsername(name(request.username()));account.setDisplayName(request.displayName().trim());account.setPasswordHash(encoder.encode(request.password()));
+        account.setMobile(mobile);account.setEmail(email);
         account=accounts.saveAndFlush(account);
         FarmMember member=new FarmMember();member.setAccount(account);member.setFarm(farm);member.setRole("OWNER");
         return principal(members.saveAndFlush(member));

@@ -134,4 +134,21 @@ class PlatformOnboardingIntegrationTests {
         } finally {pool.shutdownNow();}
     }
 
+    @Test void registrationStoresUniqueContactsAndSupportsContactLogin() throws Exception {
+        String email="signup-"+suffix+"@example.test";
+        var body=data("username","signup-"+suffix,"displayName","New Owner","password","Registration-password-123","farmName","Signup farm","mobile",phone().substring(3),"email",email.toUpperCase(Locale.ROOT));
+        var result=perform(null,"POST","/api/auth/register",body,200);
+        var user=json.readTree(result.getResponse().getContentAsString());farmIds.add(user.get("farmId").asLong());accountIds.add(user.get("id").asLong());
+        assertThat(user.get("mobile").asText()).isEqualTo(phone());assertThat(user.get("email").asText()).isEqualTo(email);
+        perform(null,"POST","/api/auth/login",data("username",email.toUpperCase(Locale.ROOT),"password","Registration-password-123"),200);
+        perform(null,"POST","/api/auth/login",data("username",phone(),"password","Registration-password-123"),200);
+        body.put("username","duplicate-phone-"+suffix);body.put("email","another-"+suffix+"@example.test");body.put("mobile",phone());
+        perform(null,"POST","/api/auth/register",body,409);
+        body.put("mobile","+1202"+String.format(Locale.ROOT,"%09d",Integer.toUnsignedLong(suffix.hashCode())%1000000000));body.put("email",email);
+        perform(null,"POST","/api/auth/register",body,409);
+        body.remove("mobile");perform(null,"POST","/api/auth/register",body,400);
+        body.put("mobile","not-a-number");perform(null,"POST","/api/auth/register",body,400);
+        body.put("mobile",phone());body.put("email","invalid-email");perform(null,"POST","/api/auth/register",body,400);
+    }
+
 }

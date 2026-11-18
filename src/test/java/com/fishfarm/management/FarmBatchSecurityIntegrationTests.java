@@ -31,6 +31,7 @@ class FarmBatchSecurityIntegrationTests {
     @Autowired EntityManagerFactory emf;
     final Set<Long> farmIds=new HashSet<>(),accountIds=new HashSet<>();
     record Session(MockHttpSession session,JsonNode user) {}
+    private static final java.util.concurrent.atomic.AtomicLong PHONES=new java.util.concurrent.atomic.AtomicLong(9000000000L);
     private static final java.util.concurrent.atomic.AtomicInteger IPS=new java.util.concurrent.atomic.AtomicInteger();
     private final String testIp="192.0.2."+IPS.incrementAndGet();
     String today(){return LocalDate.now().toString();}
@@ -49,7 +50,7 @@ class FarmBatchSecurityIntegrationTests {
     }
     Session register() throws Exception {
         String username="test-"+key();
-        MvcResult result=perform(null,"POST","/api/auth/register",data("username",username,"displayName","Test Owner","password","Integration-password-123","farmName","Test Farm","claimExisting",false),200);
+        MvcResult result=perform(null,"POST","/api/auth/register",data("username",username,"mobile",String.valueOf(PHONES.getAndIncrement()),"displayName","Test Owner","password","Integration-password-123","farmName","Test Farm","claimExisting",false),200);
         JsonNode user=json.readTree(result.getResponse().getContentAsString());farmIds.add(user.get("farmId").asLong());accountIds.add(user.get("id").asLong());
         return new Session((MockHttpSession)result.getRequest().getSession(false),user);
     }
@@ -83,7 +84,7 @@ class FarmBatchSecurityIntegrationTests {
         Session owner=register();
         mvc.perform(post("/api/ponds").session(owner.session()).contentType(MediaType.APPLICATION_JSON).content("{\"pondNumber\":\"P1\",\"pondName\":\"No csrf\"}")).andExpect(status().isForbidden());
         perform(null,"POST","/api/auth/login",data("username",owner.user().get("username").asText(),"password","incorrect"),401);
-        perform(null,"POST","/api/auth/register",data("username","weak-"+key(),"displayName","Weak","password","short","farmName","No","claimExisting",false),400);
+        perform(null,"POST","/api/auth/register",data("username","weak-"+key(),"displayName","Weak","mobile",String.valueOf(PHONES.getAndIncrement()),"password","short","farmName","No","claimExisting",false),400);
         JsonNode csrfToken=call(null,"GET","/api/auth/csrf",null);assertThat(csrfToken.get("token").asText()).isNotBlank();
     }
     @Test void tenantIsolationCoversListsIdsWritesAndRelations() throws Exception {
@@ -131,7 +132,7 @@ class FarmBatchSecurityIntegrationTests {
         Session other=register();perform(other,"POST","/api/auth/select-farm",data("farmId",id),403);
     }
     @Test void existingFarmRequiresSetupCodeAndUnownedEntitiesAreRestricted() throws Exception {
-        perform(null,"POST","/api/auth/register",data("username","claim-"+key(),"displayName","Claim","password","Integration-password-123","farmName","Existing","claimExisting",true,"setupToken","wrong"),403);
+        perform(null,"POST","/api/auth/register",data("username","claim-"+key(),"displayName","Claim","mobile",String.valueOf(PHONES.getAndIncrement()),"password","Integration-password-123","farmName","Existing","claimExisting",true,"setupToken","wrong"),403);
         // Global identity/provisioning metadata is protected by platform authorization; business entities remain tenant-scoped.
         for(var entity:emf.getMetamodel().getEntities())assertThat(FarmOwnedEntity.class.isAssignableFrom(entity.getJavaType()) || Set.of(Farm.class,AppAccount.class,FarmMember.class,CustomerInvitation.class,PlatformAuditEvent.class).contains(entity.getJavaType())).as(entity.getName()+" must be tenant scoped").isTrue();
     }

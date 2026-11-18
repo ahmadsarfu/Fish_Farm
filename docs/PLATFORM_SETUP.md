@@ -98,6 +98,11 @@ farm never grants extra free operational access to a managed customer.
   than creating a duplicate. Editing identity, moving owners and deleting customers
   are deliberately separate future workflows.
 
+The public owner-registration form (when enabled) and `/setup-existing` both
+require a mobile number and accept an optional email. These contacts are saved on
+the owner account and can be used to log in. Existing accounts can keep using
+their usernames; this change does not require them to register again.
+
 Mobile numbers are unique across application accounts. Indian ten-digit numbers
 normalize to `+91...`; other countries require the country code. Emails normalize
 to lowercase and are unique when present. These checks also have database unique
