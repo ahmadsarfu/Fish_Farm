@@ -655,6 +655,21 @@ CREATE TABLE `stage_expenses` (
   CONSTRAINT `FK6les6mmpunyai18kil0gexwwp` FOREIGN KEY (`stage_id`) REFERENCES `batch_stages` (`id`),
  CONSTRAINT `fk_stage_expenses_farm` FOREIGN KEY (`farm_id`) REFERENCES `farms` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Additive migration. Preserves existing accounts, farms and business data.
+CREATE TABLE IF NOT EXISTS trial_requests (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ owner_name VARCHAR(120) NOT NULL,
+ farm_name VARCHAR(120) NOT NULL,
+ mobile VARCHAR(16) NOT NULL,
+ email VARCHAR(254) NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+ created_at DATETIME(6) NOT NULL,
+ reviewed_at DATETIME(6) NULL,
+ reviewed_by BIGINT NULL,
+ farm_id BIGINT NULL,
+ UNIQUE KEY uq_trial_mobile (mobile),
+ KEY idx_trial_status_id (status,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 END$$
 CALL fishfarm_install_empty()$$
 DROP PROCEDURE fishfarm_install_empty$$

@@ -64,6 +64,7 @@ class PlatformOnboardingIntegrationTests {
         return new Session((MockHttpSession)result.getRequest().getSession(false),json.readTree(result.getResponse().getContentAsString()));
     }
     @AfterEach void cleanup(){
+        jdbc.update("DELETE FROM trial_requests WHERE farm_name LIKE ?", "%"+suffix+"%");
         for(long farm:farmIds){
             for(String table:List.of("platform_audit_events","customer_invitations","pond_assignments","farm_audit_events","ponds","farm_members"))jdbc.update("DELETE FROM "+table+" WHERE farm_id=?",farm);
             jdbc.update("DELETE FROM farms WHERE id=?",farm);
@@ -149,6 +150,57 @@ class PlatformOnboardingIntegrationTests {
         body.remove("mobile");perform(null,"POST","/api/auth/register",body,400);
         body.put("mobile","not-a-number");perform(null,"POST","/api/auth/register",body,400);
         body.put("mobile",phone());body.put("email","invalid-email");perform(null,"POST","/api/auth/register",body,400);
+    }
+
+    @Test void publicTrialRequestIsPrivateDeduplicatedAndDoesNotCreateFarm() throws Exception {
+        int farmsBefore=jdbc.queryForObject("SELECT COUNT(*) FROM farms",Integer.class);
+        int accountsBefore=jdbc.queryForObject("SELECT COUNT(*) FROM app_accounts",Integer.class);
+        var body=data("ownerName","Trial Owner","farmName","Trial "+suffix,"mobile",phone().substring(3),"email","TRIAL-"+suffix+"@EXAMPLE.TEST");
+        mvc.perform(post("/api/auth/trial-requests").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body))).andExpect(status().isForbidden());
+        var first=call(null,"POST","/api/auth/trial-requests",body,200);
+        body.put("ownerName","Someone else");body.put("mobile",phone());
+        assertThat(call(null,"POST","/api/auth/trial-requests",body,200)).isEqualTo(first);
+        assertThat(first.has("mobile")).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM trial_requests WHERE mobile=?",Integer.class,phone())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT owner_name FROM trial_requests WHERE mobile=?",String.class,phone())).isEqualTo("Trial Owner");
+        assertThat(jdbc.queryForObject("SELECT email FROM trial_requests WHERE mobile=?",String.class,phone())).isEqualTo("trial-"+suffix+"@example.test");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM farms",Integer.class)).isEqualTo(farmsBefore);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM app_accounts",Integer.class)).isEqualTo(accountsBefore);
+        perform(null,"GET","/api/platform/trial-requests",null,401);
+        body.put("mobile","wrong");perform(null,"POST","/api/auth/trial-requests",body,400);
+    }
+    @Test void trialApprovalCreatesOneInvitationAndTrialStartsAtActivation() throws Exception {
+        Session admin=admin();
+        call(null,"POST","/api/auth/trial-requests",data("ownerName","Trial Owner","farmName","Trial "+suffix,"mobile",phone(),"email",""),200);
+        long requestId=jdbc.queryForObject("SELECT id FROM trial_requests WHERE mobile=?",Long.class,phone());
+        var plan=data("planName","Starter","trialDays",14,"pondLimit",3,"userLimit",2);
+        var invitation=call(admin,"POST","/api/platform/trial-requests/"+requestId+"/approve",plan,200);
+        long farm=invitation.get("customer").get("id").asLong();farmIds.add(farm);
+        accountIds.add(jdbc.queryForObject("SELECT account_id FROM customer_invitations WHERE farm_id=?",Long.class,farm));
+        assertThat(jdbc.queryForObject("SELECT status FROM trial_requests WHERE id=?",String.class,requestId)).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject("SELECT subscription_ends_on FROM farms WHERE id=?",java.sql.Date.class,farm)).isNull();
+        perform(admin,"POST","/api/platform/trial-requests/"+requestId+"/approve",plan,409);
+        perform(admin,"POST","/api/platform/trial-requests/"+requestId+"/reject",null,409);
+        Session owner=activate(invitation);
+        assertThat(jdbc.queryForObject("SELECT subscription_ends_on FROM farms WHERE id=?",java.sql.Date.class,farm).toLocalDate()).isEqualTo(LocalDate.now(ZoneOffset.UTC).plusDays(14));
+        perform(owner,"GET","/api/platform/trial-requests",null,403);
+        perform(owner,"POST","/api/platform/trial-requests/"+requestId+"/approve",plan,403);
+        perform(owner,"POST","/api/platform/trial-requests/"+requestId+"/reject",null,403);
+    }
+    @Test void rejectedTrialCannotBeApprovedAndNoFarmIsCreated() throws Exception {
+        Session admin=admin();
+        call(null,"POST","/api/auth/trial-requests",data("ownerName","Trial Owner","farmName","Trial "+suffix,"mobile",phone()),200);
+        long id=jdbc.queryForObject("SELECT id FROM trial_requests WHERE mobile=?",Long.class,phone());
+        perform(admin,"POST","/api/platform/trial-requests/"+id+"/reject",null,204);
+        assertThat(jdbc.queryForObject("SELECT reviewed_by FROM trial_requests WHERE id=?",Long.class,id)).isEqualTo(admin.user().get("id").asLong());
+        assertThat(jdbc.queryForObject("SELECT farm_id FROM trial_requests WHERE id=?",Long.class,id)).isNull();
+        perform(admin,"POST","/api/platform/trial-requests/"+id+"/approve",data("planName","Trial","trialDays",10,"pondLimit",2,"userLimit",2),409);
+        perform(admin,"GET","/api/platform/trial-requests?status=INVALID",null,400);
+    }
+    @Test void trialSubmissionIsRateLimited() throws Exception {
+        var body=data("ownerName","Trial Owner","farmName","Trial "+suffix,"mobile",phone());
+        for(int i=0;i<10;i++)perform(null,"POST","/api/auth/trial-requests",body,200);
+        perform(null,"POST","/api/auth/trial-requests",body,429);
     }
 
 }

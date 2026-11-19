@@ -38,7 +38,7 @@ public class SecurityConfig {
             .addFilterBefore(new FarmRequestFilter(members,accounts,subscriptions), AuthorizationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
-                .requestMatchers("/api/auth/csrf","/api/auth/login","/api/auth/register","/api/auth/setup-status","/api/auth/invitation","/api/auth/activate").permitAll()
+                .requestMatchers("/api/auth/trial-requests","/api/auth/csrf","/api/auth/login","/api/auth/register","/api/auth/setup-status","/api/auth/invitation","/api/auth/activate").permitAll()
                 .requestMatchers("/api/platform/**").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.POST,"/api/auth/farms").hasRole("OWNER")
                 .requestMatchers("/api/auth/**").authenticated()

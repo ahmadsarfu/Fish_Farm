@@ -134,7 +134,7 @@ class FarmBatchSecurityIntegrationTests {
     @Test void existingFarmRequiresSetupCodeAndUnownedEntitiesAreRestricted() throws Exception {
         perform(null,"POST","/api/auth/register",data("username","claim-"+key(),"displayName","Claim","mobile",String.valueOf(PHONES.getAndIncrement()),"password","Integration-password-123","farmName","Existing","claimExisting",true,"setupToken","wrong"),403);
         // Global identity/provisioning metadata is protected by platform authorization; business entities remain tenant-scoped.
-        for(var entity:emf.getMetamodel().getEntities())assertThat(FarmOwnedEntity.class.isAssignableFrom(entity.getJavaType()) || Set.of(Farm.class,AppAccount.class,FarmMember.class,CustomerInvitation.class,PlatformAuditEvent.class).contains(entity.getJavaType())).as(entity.getName()+" must be tenant scoped").isTrue();
+        for(var entity:emf.getMetamodel().getEntities())assertThat(FarmOwnedEntity.class.isAssignableFrom(entity.getJavaType()) || Set.of(Farm.class,AppAccount.class,FarmMember.class,CustomerInvitation.class,PlatformAuditEvent.class,TrialRequest.class).contains(entity.getJavaType())).as(entity.getName()+" must be tenant scoped").isTrue();
     }
     @Test void fullTwoStageCostingKeepsMortalityAndFeedSnapshots() throws Exception {
         Session owner=register();long a=pond(owner,"Nursery"),b=pond(owner,"Grow-out"),fish=fish(owner),feed=feed(owner);configure(owner,a,feed);configure(owner,b,feed);
