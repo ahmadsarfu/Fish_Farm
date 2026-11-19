@@ -1,0 +1,12 @@
+.git
+.local
+.env
+.env.*
+target
+.idea
+.vscode
+*.log
+__pycache__
+docs
+scripts
+src/test

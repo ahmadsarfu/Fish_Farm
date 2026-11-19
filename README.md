@@ -23,3 +23,6 @@ double-count carried cost. Initial scope is self-use on a single server; billing
 password-recovery email and automatic invoice allocation are not included.
 
 Commercial onboarding and Super Admin setup: [Platform Setup](docs/PLATFORM_SETUP.md).
+
+Backend deployment on Render (Java 17 Docker service and hosted MySQL):
+[Render Deployment](docs/RENDER_DEPLOYMENT.md).
