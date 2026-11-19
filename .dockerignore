@@ -8,5 +8,6 @@ target
 *.log
 __pycache__
 docs
-scripts
+scripts/*
+!scripts/start-render.sh
 src/test

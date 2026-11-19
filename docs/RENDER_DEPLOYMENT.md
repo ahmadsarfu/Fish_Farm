@@ -61,17 +61,29 @@ passwords, JDBC credentials or the authenticator secret in deployment logs/chat.
 
 ## Frontend and login
 
-Build the frontend with `VITE_API_BASE_URL` set to the backend's public HTTPS URL
-(no trailing `/api`). APP_ALLOWED_ORIGINS must exactly match the browser UI origin,
-including scheme; multiple allowed origins can be comma-separated.
+For a trial using Render's default domains, deploy Fish_Farm_UI as a **Node Web
+Service** with its production API proxy (see RENDER_FREE_TRIAL.md):
 
-Cookie sessions and CSRF cookies are configured SameSite=Lax. For dependable
-browser login, serve the UI and API on the same site, for example
-`https://farm.example.com` and `https://api.example.com`, or use a same-origin
-reverse proxy. Distinct default `*.onrender.com` services can be cross-site;
-CORS alone does not make Lax cookies work in that topology. Coordinate frontend
-hosting before relying on production login. Do not remove CSRF protection to
-work around a cookie deployment issue.
+- Build: `npm ci --include=dev && VITE_API_BASE_URL= npm run build`
+- Start: `npm start`
+- Environment: `API_PROXY_TARGET=https://YOUR_BACKEND.onrender.com`
+- Set backend APP_ALLOWED_ORIGINS to the actual public frontend HTTPS origin.
+
+The browser calls the frontend's own `/api` path. The Node server forwards it to
+Spring Boot, including cookies and CSRF headers. This keeps browser authentication
+same-origin without changing SameSite=Lax or disabling CSRF. The proxy keeps API
+responses uncached and forwards separate Set-Cookie headers.
+
+A Static Site can instead be used when you have a same-origin API reverse proxy
+or frontend/API custom subdomains on the same primary site. Distinct default
+`*.onrender.com` services can be cross-site; CORS alone does not make Lax cookies
+work in that topology.
+
+For a managed MySQL provider with a private CA, add its public CA certificate as a
+Render Secret File named `ca.pem`, set `MYSQL_CA_CERT_PATH=/etc/secrets/ca.pem`, and
+keep `sslMode=VERIFY_IDENTITY` in the JDBC URL. The startup script adds that CA to
+a temporary copy of the JVM trust store while preserving standard public CAs.
+No database password or authenticator secret is baked into the Docker image.
 
 For daily farm use, choose a service/database arrangement with suitable uptime,
 automatic backups and tested restores. Check your plan's sleep, storage and
@@ -80,3 +92,5 @@ in one API instance; use shared session/rate-limit storage before adding replica
 
 After deployment, verify `/api/auth/setup-status`, the UI login, MFA, farm switching
 and one feeding tick through the actual public HTTPS addresses.
+
+For the complete backend + frontend trial walkthrough, see [Render Free Trial](RENDER_FREE_TRIAL.md).
