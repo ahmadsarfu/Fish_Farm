@@ -18,4 +18,4 @@ if [ -n "${MYSQL_CA_CERT_PATH:-}" ]; then
   set -- "-Djavax.net.ssl.trustStore=$trust_directory/cacerts" \
     '-Djavax.net.ssl.trustStorePassword=changeit' "$@"
 fi
-exec java -XX:MaxRAMPercentage=70.0 "$@" -jar /app/app.jar
+exec java -Duser.timezone=UTC -XX:MaxRAMPercentage=70.0 "$@" -jar /app/app.jar

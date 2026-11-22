@@ -23,3 +23,9 @@ The migration can be rerun without replacing populated original snapshots or rev
 ## Verification
 
 The MySQL integration suite covers original rate retention, owner/farm boundaries, locked deletion/unticking, cancellation and restore totals, concurrent reviews, and transaction rollback after a batch transfer. Browser tests use mocked API responses to verify owner/manager/labour controls, mandatory reasons, review failures and mobile layout; they do not assert production availability. The migration was also applied twice to a disposable database created from the master schema with an existing feeding row, confirming the original snapshot survived a changed current value.
+
+## Timezone
+
+The application business date and validation use Asia/Kolkata (IST). UI history, correction reviews, trial-request dates and activation expiry dates explicitly use IST even on a France/US-configured device. JVM audit generation, JDBC/Hibernate instant persistence and MySQL application sessions use UTC. The database server can remain in France; its geographical region does not determine the application's business date. Database DATE values (feeding dates, sales dates, subscription dates) are not timezone-shifted.
+
+No historical timestamps are rewritten by this change. Legacy farm audit DATETIME fields are interpreted as UTC, matching their existing writer. If an external import used a different timezone, investigate that import separately before converting it. Remove any conflicting `serverTimezone`/`connectionTimeZone` setting in the deployment JDBC URL if present; use UTC for JDBC storage, not Europe/Paris or Asia/Kolkata. The business timezone no longer reads FARM_TIME_ZONE; app.business-zone defaults explicitly to Asia/Kolkata.

@@ -85,11 +85,11 @@ unique usernames; creating a member cannot reset an existing person's password.
 
 Authentication uses BCrypt hashes, HttpOnly session cookies, CSRF protection,
 explicit credentialed CORS origins, session-ID rotation, no-store API responses,
-and login/registration throttling. Business dates and validation use the same
-configured `FARM_TIME_ZONE` (default `Asia/Kolkata`), also supplied to the UI. This
+and login/registration throttling. Business dates and validation use
+`Asia/Kolkata` (IST), also supplied to the UI. This
 avoids UTC/local-midnight disagreements for labour ticks. New audit timestamps are
 stored in UTC and displayed in that business timezone. Existing DATE values are
-not shifted. One business timezone is configured per deployment in this release. Do not expose an older unauthenticated backend
+not shifted. Business dates and UI timestamps use IST in this deployment. MySQL connections and Hibernate timestamps use UTC regardless of host region. Do not expose an older unauthenticated backend
 alongside the new server.
 
 ## Batch workflow
