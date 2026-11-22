@@ -207,6 +207,12 @@ CREATE TABLE `daily_feeds` (
   `quantity_kg` decimal(10,3) NOT NULL,
   `rate_per_kg` decimal(10,2) NOT NULL,
   `expense` decimal(18,2) NOT NULL,
+  `original_quantity_kg` decimal(10,3) NOT NULL,
+  `original_rate_per_kg` decimal(10,2) NOT NULL,
+  `original_expense` decimal(18,2) NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'RECORDED',
+  `source` varchar(16) NOT NULL DEFAULT 'LEGACY',
+  `version` bigint NOT NULL DEFAULT 0,
   `notes` varchar(500) DEFAULT NULL,
   `farm_id` bigint NOT NULL DEFAULT '1',
   `recorded_by` bigint DEFAULT NULL,
@@ -669,6 +675,30 @@ CREATE TABLE IF NOT EXISTS trial_requests (
  farm_id BIGINT NULL,
  UNIQUE KEY uq_trial_mobile (mobile),
  KEY idx_trial_status_id (status,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE IF NOT EXISTS feed_revisions (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ farm_id BIGINT NOT NULL,
+ feed_id BIGINT NOT NULL,
+ revision BIGINT NOT NULL,
+ action VARCHAR(16) NOT NULL,
+ before_quantity_kg DECIMAL(10,3) NOT NULL,
+ after_quantity_kg DECIMAL(10,3) NOT NULL,
+ before_expense DECIMAL(18,2) NOT NULL,
+ after_expense DECIMAL(18,2) NOT NULL,
+ adjustment DECIMAL(18,2) NOT NULL,
+ reason VARCHAR(500) NOT NULL,
+ actor_id BIGINT NOT NULL,
+ actor_name VARCHAR(120) NOT NULL,
+ reviewed_at DATETIME(6) NOT NULL,
+ recorded_by BIGINT NULL,
+ recorded_at DATETIME(6) NULL,
+ last_changed_by BIGINT NULL,
+ last_changed_at DATETIME(6) NULL,
+ UNIQUE KEY uq_feed_revision (feed_id, revision),
+ KEY idx_revision_farm_feed (farm_id, feed_id),
+ CONSTRAINT fk_revision_farm FOREIGN KEY (farm_id) REFERENCES farms(id),
+ CONSTRAINT fk_revision_feed FOREIGN KEY (feed_id) REFERENCES daily_feeds(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 END$$
 CALL fishfarm_install_empty()$$

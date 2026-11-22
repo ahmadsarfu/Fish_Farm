@@ -55,7 +55,7 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
             if (row.morning().completed() || (row.active() && row.config() != null && positive(row.config().morningQtyKg()))) planned++;
             if (row.evening().completed() || (row.active() && row.config() != null && positive(row.config().eveningQtyKg()))) planned++;
         }
-        BigDecimal expense = entries.stream().filter(f -> access.canFeed(f.getPond().getId())).map(DailyFeed::getExpense).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal expense = entries.stream().filter(f -> access.canFeed(f.getPond().getId())).map(DailyFeed::netExpense).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new FeedingDashboardResponse(date, completed, planned, expense, rows);
     }
 
@@ -84,14 +84,9 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
         Pond pond = lock(pondId);
         List<DailyFeed> existing = feeds.search(request.date(), request.date(), pondId).stream()
                 .filter(f -> f.getFeedingTime() == time).toList();
-        if (!request.completed()) {
-            for (DailyFeed feed : existing) batchService.removeFeed(feed);
-            audit.record("UNDO_FEED","POND",pondId,"Removed "+time+" feeding for "+request.date());
-            feeds.deleteAll(existing); feeds.flush();
-            return dashboard(request.date());
-        }
-        // Retried taps preserve the original quantity/rate and never create another charge.
-        if (!existing.isEmpty()) return dashboard(request.date());
+        if (!request.completed()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Saved ticks are locked. The owner can correct or cancel them in Feeding History.");
+        if (existing.stream().anyMatch(feed -> !feed.cancelled())) return dashboard(request.date());
+        if (!existing.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,"This slot has a cancelled record. Ask the owner to review and restore it.");
         if (!active(pond)) throw bad("This pond is inactive");
         PondFeedConfig config = configs.findByPondId(pondId).orElseThrow(() -> bad("Set up feed and quantity for this pond first"));
         FeedType type = config.getFeedType();
@@ -101,6 +96,7 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
         if (!positive(type.getRatePerKg())) throw bad("Set a feed rate greater than zero in Feed Master first");
         DailyFeed feed = new DailyFeed(); feed.setPond(pond); feed.setFeedType(type);
         feed.setFeedingDate(request.date()); feed.setFeedingTime(time);
+        feed.setSource("CHECKLIST");
         feed.setQuantityKg(quantity); feed.setRatePerKg(type.getRatePerKg());
         feed.setExpense(quantity.multiply(type.getRatePerKg()).setScale(2, RoundingMode.HALF_UP));
         feed=feeds.saveAndFlush(feed);
@@ -111,8 +107,8 @@ public class FeedingDashboardServiceImpl implements FeedingDashboardService {
 
     private Slot slot(List<DailyFeed> entries, FeedingTime time) {
         List<DailyFeed> selected = entries.stream().filter(f -> f.getFeedingTime() == time).toList();
-        return new Slot(!selected.isEmpty(), selected.stream().map(DailyFeed::getQuantityKg).reduce(BigDecimal.ZERO, BigDecimal::add),
-                selected.stream().map(DailyFeed::getExpense).reduce(BigDecimal.ZERO, BigDecimal::add),
+        return new Slot(selected.stream().anyMatch(f -> !f.cancelled()), !selected.isEmpty() && selected.stream().allMatch(DailyFeed::cancelled), selected.stream().map(DailyFeed::netQuantity).reduce(BigDecimal.ZERO, BigDecimal::add),
+                selected.stream().map(DailyFeed::netExpense).reduce(BigDecimal.ZERO, BigDecimal::add),
                 selected.stream().map(DailyFeedResponse::from).toList());
     }
     private Pond lock(Long id) { return ponds.findForFeedingUpdate(id).orElseThrow(() -> missing("Pond not found")); }

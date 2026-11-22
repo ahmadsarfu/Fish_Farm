@@ -32,4 +32,16 @@ public class DailyFeed extends FarmOwnedEntity {
     private BigDecimal expense;
     @Column(length = 500)
     private String notes;
+    @Column(nullable=false, updatable=false, precision=10, scale=3) private BigDecimal originalQuantityKg;
+    @Column(nullable=false, updatable=false, precision=10, scale=2) private BigDecimal originalRatePerKg;
+    @Column(nullable=false, updatable=false, precision=18, scale=2) private BigDecimal originalExpense;
+    @Column(nullable=false,length=16) private String status = "RECORDED";
+    @Column(nullable=false,length=16,updatable=false) private String source = "LEGACY";
+    @Version @Column(nullable=false) private long version;
+    @PrePersist void preserveOriginal() {
+        originalQuantityKg=quantityKg; originalRatePerKg=ratePerKg; originalExpense=expense;
+    }
+    public boolean cancelled() { return "CANCELLED".equals(status); }
+    public BigDecimal netQuantity() { return cancelled() ? BigDecimal.ZERO : quantityKg; }
+    public BigDecimal netExpense() { return cancelled() ? BigDecimal.ZERO : expense; }
 }

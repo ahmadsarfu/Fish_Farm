@@ -23,6 +23,7 @@ import java.util.*;
 public class DailyFeedController {
     private final DailyFeedService service;
     private final FeedingDashboardService dashboardService;
+    private final com.fishfarm.management.service.FeedReviewService reviews;
 
     @GetMapping("/feeding-dashboard")
     public FeedingDashboardResponse dashboard(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -62,9 +63,10 @@ public class DailyFeedController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long pondId) {
         List<DailyFeedResponse> entries = service.search(from, to, pondId);
-        return Map.of("entryCount", entries.size(),
-                "totalQuantityKg", entries.stream().map(DailyFeedResponse::quantityKg).reduce(BigDecimal.ZERO, BigDecimal::add),
-                "totalExpense", entries.stream().map(DailyFeedResponse::expense).reduce(BigDecimal.ZERO, BigDecimal::add));
+        return Map.of("entryCount", entries.stream().filter(e -> !"CANCELLED".equals(e.status())).count(),
+                "cancelledCount", entries.stream().filter(e -> "CANCELLED".equals(e.status())).count(),
+                "totalQuantityKg", entries.stream().map(DailyFeedResponse::netQuantityKg).reduce(BigDecimal.ZERO, BigDecimal::add),
+                "totalExpense", entries.stream().map(DailyFeedResponse::netExpense).reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     @PostMapping("/daily-feeds") @ResponseStatus(HttpStatus.CREATED)
@@ -75,6 +77,12 @@ public class DailyFeedController {
 
     @DeleteMapping("/daily-feeds/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) { service.delete(id); }
+
+    @PostMapping("/daily-feeds/{id}/review")
+    public DailyFeedResponse review(@PathVariable Long id,@Valid @RequestBody FeedReviewRequest request) { return reviews.review(id,request); }
+
+    @GetMapping("/daily-feeds/{id}/revisions")
+    public List<FeedRevisionResponse> revisions(@PathVariable Long id) { return reviews.revisions(id); }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> statusError(ResponseStatusException exception) {

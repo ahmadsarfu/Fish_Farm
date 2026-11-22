@@ -77,12 +77,12 @@ class FeedingDashboardIntegrationTests extends LegacyDomainTestContext {
         assertThat(pm.get("totalExpense").decimalValue()).isEqualByComparingTo("400.50");
     }
 
-    @Test void undoIsIdempotentAndRestoresTotals() throws Exception {
-        configure("2", "2"); tick("MORNING", true, LocalDate.now());
-        JsonNode undo = tick("MORNING", false, LocalDate.now());
-        assertThat(undo.get("completedSlots").asInt()).isZero();
-        assertThat(undo.get("totalExpense").decimalValue()).isEqualByComparingTo("0");
-        tick("MORNING", false, LocalDate.now()); assertThat(feeds.count()).isZero();
+    @Test void savedTicksCannotBeUndoneAndRecordsRemain() throws Exception {
+        configure("2","2");tick("MORNING",true,LocalDate.now());
+        mvc.perform(put("/api/feeding-dashboard/{id}/slots/MORNING",pond.getId())
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("date",LocalDate.now().toString(),"completed",false))))
+            .andExpect(status().isConflict());
+        assertThat(feeds.count()).isEqualTo(1);
     }
 
     @Test void datesAreIsolatedAndFutureCompletionIsRejected() throws Exception {

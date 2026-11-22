@@ -160,8 +160,9 @@ public class BatchServiceImpl implements BatchService {
         if(existing!=null) {
             feedMutable(existing);BatchStage s=existing.getStage();
             if(!s.getPond().getId().equals(feed.getPond().getId()))throw bad("Undo this batch feeding before moving it to another pond");
-            open(s);date(s,feed.getFeedingDate());existing.setAmount(feed.getExpense());existing.setExpenseDate(feed.getFeedingDate());s.setLastActivityOn(feed.getFeedingDate());return;
+            open(s);date(s,feed.getFeedingDate());existing.setAmount(feed.netExpense());existing.setExpenseDate(feed.getFeedingDate());s.setLastActivityOn(feed.getFeedingDate());return;
         }
+        if(feed.cancelled()) return;
         BatchStage s=stages.findByPondIdAndCurrentCountGreaterThan(feed.getPond().getId(),0).orElse(null);
         if(s==null || feed.getFeedingDate().isBefore(s.getStartedOn()))return;
         date(s,feed.getFeedingDate());addExpense(s,feed.getFeedingDate(),"FEED",feed.getExpense(),"Daily feeding "+feed.getFeedingTime(),feed.getId());

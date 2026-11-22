@@ -48,21 +48,22 @@ public class DailyFeedService {
 
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public DailyFeedResponse save(Long id, DailyFeedRequest request) {
-        DailyFeed feed = id == null ? new DailyFeed() : feeds.findById(id)
-                .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
+        if (!"OWNER".equals(com.fishfarm.management.security.FarmContext.role())) throw error(HttpStatus.FORBIDDEN,"Only the farm owner can add missed feeding records");
+        if (id != null) throw error(HttpStatus.CONFLICT,"Saved feeding records are locked. Use owner review with a reason.");
+        if (request.notes()==null || request.notes().strip().length()<5) throw error(HttpStatus.BAD_REQUEST,"Enter a reason for this missed feeding (at least 5 characters)");
+        DailyFeed feed = new DailyFeed();
         Pond pond = ponds.findForFeedingUpdate(request.pondId())
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Pond not found"));
         FeedType type = types.findById(request.feedTypeId())
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feed type not found"));
-        boolean samePond = id != null && feed.getPond().getId().equals(pond.getId());
-        boolean sameType = id != null && feed.getFeedType().getId().equals(type.getId());
-        if ((!samePond && (Boolean.TRUE.equals(pond.getDeleted()) || pond.getStatus() != PondStatus.ACTIVE))
-                || (!sameType && !Boolean.TRUE.equals(type.getActive())))
+        if (Boolean.TRUE.equals(pond.getDeleted()) || pond.getStatus() != PondStatus.ACTIVE
+                || !Boolean.TRUE.equals(type.getActive()))
             throw error(HttpStatus.BAD_REQUEST, "Select an active pond and feed type");
         if (feeds.existsByPondIdAndFeedingDateAndFeedingTimeAndFeedTypeIdAndIdNot(pond.getId(),
-                request.feedingDate(), request.feedingTime(), type.getId(), id == null ? -1L : id))
-            throw error(HttpStatus.CONFLICT, "This pond already has this feed for the selected date and time. Edit the existing record.");
-        if (!sameType) feed.setRatePerKg(type.getRatePerKg());
+                request.feedingDate(), request.feedingTime(), type.getId(), -1L))
+            throw error(HttpStatus.CONFLICT, "This pond already has this feed for the selected date and time. Use owner review on the existing record.");
+        feed.setRatePerKg(type.getRatePerKg());
+        feed.setSource("MISSED_ENTRY");
         feed.setPond(pond);
         feed.setFeedType(type);
         feed.setFeedingDate(request.feedingDate());
@@ -78,11 +79,7 @@ public class DailyFeedService {
 
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void delete(Long id) {
-        DailyFeed feed = feeds.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Feeding record not found"));
-        ponds.findForFeedingUpdate(feed.getPond().getId()).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Pond not found"));
-        batchService.removeFeed(feed);
-        audit.record("DELETE_FEED","DAILY_FEED",feed.getId(),"Removed feeding expense "+feed.getExpense());
-        feeds.delete(feed);
+        throw error(HttpStatus.CONFLICT,"Feeding records cannot be deleted. Use owner review to cancel with a reason.");
     }
 
     private ResponseStatusException error(HttpStatus status, String message) {

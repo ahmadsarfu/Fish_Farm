@@ -45,6 +45,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/team/**").hasRole("OWNER")
                 .requestMatchers(HttpMethod.GET,"/api/feeding-dashboard","/api/ponds","/api/feed-types").hasAnyRole("OWNER","MANAGER","LABOUR")
                 .requestMatchers(HttpMethod.PUT,"/api/feeding-dashboard/*/slots/*").hasAnyRole("OWNER","MANAGER","LABOUR")
+                .requestMatchers(HttpMethod.POST,"/api/daily-feeds","/api/daily-feeds/*/review").hasRole("OWNER")
+                .requestMatchers(HttpMethod.PUT,"/api/daily-feeds/*").denyAll()
+                .requestMatchers(HttpMethod.DELETE,"/api/daily-feeds/*").denyAll()
                 .requestMatchers("/api/**").hasAnyRole("OWNER","MANAGER")
                 .anyRequest().denyAll())
             .exceptionHandling(errors -> errors

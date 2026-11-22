@@ -43,7 +43,7 @@ class DailyFeedIntegrationTests extends LegacyDomainTestContext {
         Map<String, Object> body = new HashMap<>();
         body.put("pondId", pond.getId()); body.put("feedTypeId", type.getId());
         body.put("feedingDate", LocalDate.now().toString()); body.put("feedingTime", "MORNING");
-        body.put("quantityKg", "2.555"); body.put("notes", "test");
+        body.put("quantityKg", "2.555"); body.put("notes", "Missed feeding entered after review");
         return body;
     }
 
@@ -67,7 +67,7 @@ class DailyFeedIntegrationTests extends LegacyDomainTestContext {
                         .content("{\"sizeMm\":1,\"name\":\"Starter\",\"ratePerKg\":60,\"active\":true}"))
                 .andExpect(status().isOk());
         Map<String, Object> body = body(); body.put("quantityKg", "3.000");
-        mvc.perform(put("/api/daily-feeds/{id}", id).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+        mvc.perform(post("/api/daily-feeds/{id}/review", id).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("action","CORRECT","expectedVersion",0,"quantityKg","3.000","reason","Actual quantity was three kg"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.ratePerKg").value(50.25)).andExpect(jsonPath("$.expense").value(150.75));
         body.put("feedingTime", "EVENING");
         long eveningId = create(body);
@@ -112,11 +112,14 @@ class DailyFeedIntegrationTests extends LegacyDomainTestContext {
         mvc.perform(get("/api/daily-feeds").param("from", LocalDate.now().plusDays(1).toString()).param("to", today)).andExpect(status().isBadRequest());
     }
 
-    @Test void deletionRemovesExpenseAndMissingRecordReturns404() throws Exception {
-        long id = create(body());
-        mvc.perform(delete("/api/daily-feeds/{id}", id)).andExpect(status().isNoContent());
-        assertThat(feeds.count()).isZero();
-        mvc.perform(delete("/api/daily-feeds/{id}", id)).andExpect(status().isNotFound());
+    @Test void cancellationPreservesRecordAndOriginalButExcludesExpense() throws Exception {
+        long id=create(body());
+        mvc.perform(post("/api/daily-feeds/{id}/review",id).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("action","CANCEL","expectedVersion",0,"reason","Mistaken feeding entry"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED")).andExpect(jsonPath("$.netExpense").value(0));
+        assertThat(feeds.count()).isEqualTo(1);
+        assertThat(feeds.findById(id).orElseThrow().getOriginalExpense()).isEqualByComparingTo("128.39");
+        mvc.perform(delete("/api/daily-feeds/{id}",id)).andExpect(status().isConflict());
     }
 
     @Test void feedMasterRestrictsSizeDuplicatesAndRate() throws Exception {

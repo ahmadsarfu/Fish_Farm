@@ -66,7 +66,7 @@ class FarmBatchSecurityIntegrationTests {
     @AfterEach void cleanup(){
         FarmContext.clear();
         for(Long farm:farmIds){
-            for(String table:List.of("stage_expenses","batch_movements","batch_stages","fish_batches","farm_audit_events","pond_assignments","daily_feeds","feeding_records","pond_feed_configs","weight_entries","weighing_sessions","dispatches","harvest_items","harvests","fish_stock_entries","inventory","customers","feed_types","fish_types","ponds"))
+            for(String table:List.of("feed_revisions","stage_expenses","batch_movements","batch_stages","fish_batches","farm_audit_events","pond_assignments","daily_feeds","feeding_records","pond_feed_configs","weight_entries","weighing_sessions","dispatches","harvest_items","harvests","fish_stock_entries","inventory","customers","feed_types","fish_types","ponds"))
                 jdbc.update("DELETE FROM "+table+" WHERE farm_id=?"+(table.equals("batch_stages")?" ORDER BY id DESC":""),farm);
             jdbc.update("DELETE FROM farm_members WHERE farm_id=?",farm);jdbc.update("DELETE FROM farms WHERE id=?",farm);
         }
@@ -146,7 +146,7 @@ class FarmBatchSecurityIntegrationTests {
         JsonNode result=call(owner,"POST","/api/batch-stages/"+s1+"/transfers",transfer);long s2=stage(result,1);
         JsonNode retry=call(owner,"POST","/api/batch-stages/"+s1+"/transfers",transfer);assertThat(retry.get("stages")).hasSize(2);
         assertThat(result.get("stages").get(1).get("openingCost").decimalValue()).isEqualByComparingTo("6000");
-        perform(owner,"PUT","/api/feeding-dashboard/"+a+"/slots/MORNING",data("date",today(),"completed",false),400);
+        perform(owner,"PUT","/api/feeding-dashboard/"+a+"/slots/MORNING",data("date",today(),"completed",false),409);
         call(owner,"PUT","/api/feeding-dashboard/"+b+"/slots/MORNING",data("date",today(),"completed",true));
         result=call(owner,"POST","/api/batch-stages/"+s2+"/expenses",data("requestId",key(),"date",today(),"category","LABOUR","amount",3400));
         assertThat(result.get("totalExpense").decimalValue()).isEqualByComparingTo("10000");assertThat(result.get("remainingCount").asInt()).isEqualTo(60);
@@ -215,4 +215,64 @@ class FarmBatchSecurityIntegrationTests {
         perform(owner,"DELETE","/api/ponds/"+pond,null,400);
         perform(owner,"POST","/api/harvests",data("pondId",pond,"harvestDate",today(),"items",List.of(data("fishTypeId",fish,"weightKg",1))),400);
     }
+    @Test void ownerCorrectionsCancellationAndRestoreKeepAllHistoryAndNetBatchCost() throws Exception {
+        Session owner=register();long p=pond(owner,"Review pond"),f=feed(owner),fish=fish(owner);configure(owner,p,f);JsonNode batch=batch(owner,p,fish);
+        JsonNode dashboard=call(owner,"PUT","/api/feeding-dashboard/"+p+"/slots/MORNING",data("date",today(),"completed",true));
+        long id=dashboard.get("ponds").get(0).get("morning").get("entries").get(0).get("id").asLong();
+        call(owner,"PUT","/api/feed-types/"+f,data("sizeMm",1,"name","Starter","ratePerKg",99,"active",true));
+        JsonNode changed=call(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","CORRECT","expectedVersion",0,"quantityKg",3,"reason","Actual quantity was three kg"));
+        assertThat(changed.get("expense").decimalValue()).isEqualByComparingTo("150");assertThat(changed.get("originalExpense").decimalValue()).isEqualByComparingTo("100");assertThat(changed.get("ratePerKg").decimalValue()).isEqualByComparingTo("50");
+        perform(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","CORRECT","expectedVersion",0,"quantityKg",4,"reason","Stale review must not overwrite"),409);
+        perform(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","CANCEL","expectedVersion",1,"reason","  "),400);
+        JsonNode cancelled=call(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","CANCEL","expectedVersion",1,"reason","Mistaken feeding confirmation"));
+        assertThat(cancelled.get("status").asText()).isEqualTo("CANCELLED");assertThat(cancelled.get("netExpense").decimalValue()).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("SELECT amount FROM stage_expenses WHERE feed_entry_id=?",BigDecimal.class,id)).isEqualByComparingTo("0");
+        JsonNode history=call(owner,"GET","/api/daily-feeds?from="+today()+"&to="+today(),null);assertThat(history).hasSize(1);
+        assertThat(call(owner,"GET","/api/daily-feeds/summary?from="+today()+"&to="+today(),null).get("totalExpense").decimalValue()).isEqualByComparingTo("0");
+        JsonNode cancelledDashboard=call(owner,"GET","/api/feeding-dashboard?date="+today(),null);assertThat(cancelledDashboard.get("completedSlots").asInt()).isZero();assertThat(cancelledDashboard.get("ponds").get(0).get("morning").get("cancelled").asBoolean()).isTrue();
+        perform(owner,"PUT","/api/feeding-dashboard/"+p+"/slots/MORNING",data("date",today(),"completed",true),409);
+        call(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","RESTORE","expectedVersion",2,"quantityKg",4,"reason","Confirmed actual four kg feeding"));
+        JsonNode revisions=call(owner,"GET","/api/daily-feeds/"+id+"/revisions",null);assertThat(revisions).hasSize(3);
+        assertThat(revisions.get(0).get("adjustment").decimalValue()).isEqualByComparingTo("50");assertThat(revisions.get(1).get("adjustment").decimalValue()).isEqualByComparingTo("-150");assertThat(revisions.get(2).get("adjustment").decimalValue()).isEqualByComparingTo("200");
+        assertThat(revisions.get(0).get("actorId").asLong()).isEqualTo(owner.user().get("id").asLong());
+        assertThat(jdbc.queryForObject("SELECT original_quantity_kg FROM daily_feeds WHERE id=?",BigDecimal.class,id)).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("SELECT amount FROM stage_expenses WHERE feed_entry_id=?",BigDecimal.class,id)).isEqualByComparingTo("200");
+        assertThat(call(owner,"GET","/api/batches/"+batch.get("id").asLong(),null).get("stages").get(0).get("costPerRemainingFish").decimalValue()).isEqualByComparingTo("12");
+        perform(owner,"PUT","/api/daily-feeds/"+id,data("pondId",p,"feedTypeId",f,"feedingDate",today(),"feedingTime","MORNING","quantityKg",9),403);
+        perform(owner,"DELETE","/api/daily-feeds/"+id,null,403);
+    }
+    @Test void onlyOwningFarmOwnerCanReviewAndManagersCanReadOnly() throws Exception {
+        Session owner=register(),other=register();long p=pond(owner,"Review"),f=feed(owner);configure(owner,p,f);
+        var dashboard=call(owner,"PUT","/api/feeding-dashboard/"+p+"/slots/MORNING",data("date",today(),"completed",true));long id=dashboard.get("ponds").get(0).get("morning").get("entries").get(0).get("id").asLong();
+        var review=data("action","CORRECT","expectedVersion",0,"quantityKg",3,"reason","Actual quantity correction");
+        perform(other,"POST","/api/daily-feeds/"+id+"/review",review,404);perform(other,"GET","/api/daily-feeds/"+id+"/revisions",null,404);
+        for(String role:List.of("MANAGER","LABOUR")) {
+            String username="feed-review-"+key();call(owner,"POST","/api/team",data("username",username,"displayName",role,"password","Integration-password-123","role",role,"pondIds",List.of(p)));
+            var logged=perform(null,"POST","/api/auth/login",data("username",username,"password","Integration-password-123"),200);
+            var user=json.readTree(logged.getResponse().getContentAsString());accountIds.add(user.get("id").asLong());Session member=new Session((MockHttpSession)logged.getRequest().getSession(false),user);
+            perform(member,"POST","/api/daily-feeds/"+id+"/review",review,403);
+            perform(member,"GET","/api/daily-feeds/"+id+"/revisions",null,"MANAGER".equals(role)?200:403);
+            perform(member,"POST","/api/daily-feeds",data("pondId",p,"feedTypeId",f,"feedingDate",today(),"feedingTime","EVENING","quantityKg",2,"notes","Missed feeding"),403);
+        }
+    }
+    @Test void concurrentReviewsCannotApplyTwoAdjustments() throws Exception {
+        Session owner=register();long p=pond(owner,"Concurrent review"),f=feed(owner);configure(owner,p,f);
+        var dashboard=call(owner,"PUT","/api/feeding-dashboard/"+p+"/slots/MORNING",data("date",today(),"completed",true));long id=dashboard.get("ponds").get(0).get("morning").get("entries").get(0).get("id").asLong();
+        var pool=Executors.newFixedThreadPool(2);
+        try {
+            Callable<Integer> task=()->mvc.perform(post("/api/daily-feeds/"+id+"/review").session(owner.session()).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(data("action","CORRECT","expectedVersion",0,"quantityKg",3,"reason","Concurrent actual feeding correction")))).andReturn().getResponse().getStatus();
+            var a=pool.submit(task);var b=pool.submit(task);assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,409);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM feed_revisions WHERE feed_id=?",Integer.class,id)).isEqualTo(1);
+        } finally {pool.shutdownNow();}
+    }
+    @Test void reviewOfFeedCarriedIntoTransferRollsBackCompletely() throws Exception {
+        Session owner=register();long a=pond(owner,"Nursery"),b=pond(owner,"Production"),f=feed(owner),fish=fish(owner);configure(owner,a,f);var batch=batch(owner,a,fish);
+        var dashboard=call(owner,"PUT","/api/feeding-dashboard/"+a+"/slots/MORNING",data("date",today(),"completed",true));long id=dashboard.get("ponds").get(0).get("morning").get("entries").get(0).get("id").asLong();
+        call(owner,"POST","/api/batch-stages/"+stage(batch,0)+"/transfers",data("requestId",key(),"date",today(),"targetPondId",b,"count",100,"transferCost",10,"notes","Move to production"));
+        perform(owner,"POST","/api/daily-feeds/"+id+"/review",data("action","CANCEL","expectedVersion",0,"reason","Must preserve transferred costs"),400);
+        assertThat(jdbc.queryForObject("SELECT status FROM daily_feeds WHERE id=?",String.class,id)).isEqualTo("RECORDED");assertThat(jdbc.queryForObject("SELECT version FROM daily_feeds WHERE id=?",Long.class,id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM feed_revisions WHERE feed_id=?",Integer.class,id)).isZero();
+    }
+
 }
